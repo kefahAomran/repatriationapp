@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import '../providers/family_info_provider.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 
 class EditFamilyInfoScreen extends StatefulWidget {
   const EditFamilyInfoScreen({super.key});
@@ -28,6 +30,8 @@ class _EditFamilyInfoScreenState extends State<EditFamilyInfoScreen> {
   final _destinationZipController = TextEditingController();
   final _destinationMobileNumberController = TextEditingController();
   final _destinationAddressController = TextEditingController();
+  final _currentGPSController = TextEditingController();
+  final _destinationGPSController = TextEditingController();
   final List<String> countries = [
     "Saudi Arabia",
     "Syrian ",
@@ -58,6 +62,27 @@ class _EditFamilyInfoScreenState extends State<EditFamilyInfoScreen> {
     _loadInitialData();
   }
 
+  Future<void> _getCurrentLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      // إدارة حالة عدم تمكين الخدمة
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission != LocationPermission.whileInUse) {
+        // إدارة حالة الرفض
+        return;
+      }
+    }
+
+    Position? position = await Geolocator.getCurrentPosition();
+    String gps = "${position.latitude},${position.longitude}";
+    // تحديث الـ Provider أو الحالة
+  }
+
   void _loadInitialData() {
     final familyInfo = Provider.of<FamilyInfoProvider>(context, listen: false);
     final currentLocation = familyInfo.currentLocation;
@@ -77,6 +102,7 @@ class _EditFamilyInfoScreenState extends State<EditFamilyInfoScreen> {
     _destinationZipController.text = destinationLocation.zip;
     _destinationMobileNumberController.text = destinationLocation.mobilenumber;
     _destinationAddressController.text = destinationLocation.address;
+    _destinationGPSController.text = destinationLocation.gps;
   }
 
   Future<void> _saveFamilyInfo() async {
@@ -92,16 +118,19 @@ class _EditFamilyInfoScreenState extends State<EditFamilyInfoScreen> {
         zip: _currentZipController.text,
         mobilenumber: _currentMobileNumber.text,
         address: _currentAddress.text,
+        gps: _currentGPSController.text,
       );
 
       final destinationLocation = FamilyLocation(
-          country: _destinationCountryController.text,
-          region: _destinationRegionController.text,
-          zone: _destinationZoneController.text,
-          residence: _destinationResidenceController.text,
-          zip: _destinationZipController.text,
-          address: _destinationAddressController.text,
-          mobilenumber: _destinationMobileNumberController.text);
+        country: _destinationCountryController.text,
+        region: _destinationRegionController.text,
+        zone: _destinationZoneController.text,
+        residence: _destinationResidenceController.text,
+        zip: _destinationZipController.text,
+        address: _destinationAddressController.text,
+        mobilenumber: _destinationMobileNumberController.text,
+        gps: _destinationGPSController.text,
+      );
 
       familyInfo.updateCurrentLocation(currentLocation);
       familyInfo.updateDestinationLocation(destinationLocation);
@@ -177,41 +206,55 @@ class _EditFamilyInfoScreenState extends State<EditFamilyInfoScreen> {
     required TextEditingController controller,
     bool isFullWidth = false,
     TextInputType keyboardType = TextInputType.text,
+    Widget? suffixIcon, // أيقونة التقويم
+    Widget? trailingButton, // زر الموقع
   }) {
     return Container(
       width: isFullWidth ? double.infinity : null,
       margin: EdgeInsets.only(bottom: 16.h),
-      child: TextFormField(
-        controller: controller,
-        keyboardType: keyboardType,
-        decoration: InputDecoration(
-          hintText: label,
-          hintStyle: TextStyle(
-            color: Colors.grey[400],
-            fontSize: 14.sp,
-            fontFamily: 'Manrope',
+      child: Row(
+        children: [
+          Expanded(
+            child: TextFormField(
+              controller: controller,
+              keyboardType: keyboardType,
+              decoration: InputDecoration(
+                hintText: label,
+                hintStyle: TextStyle(
+                  color: Colors.grey[400],
+                  fontSize: 14.sp,
+                  fontFamily: 'Manrope',
+                ),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.r),
+                  borderSide: BorderSide(color: Colors.blue.withOpacity(0.5)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.r),
+                  borderSide: BorderSide(color: Colors.blue.withOpacity(0.5)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.r),
+                  borderSide: const BorderSide(color: Colors.blue),
+                ),
+                suffixIcon: suffixIcon, // إضافة أيقونة التقويم هنا
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please enter $label';
+                }
+                return null;
+              },
+            ),
           ),
-          contentPadding:
-              EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8.r),
-            borderSide: BorderSide(color: Colors.blue.withOpacity(0.5)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8.r),
-            borderSide: BorderSide(color: Colors.blue.withOpacity(0.5)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8.r),
-            borderSide: const BorderSide(color: Colors.blue),
-          ),
-        ),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter $label';
-          }
-          return null;
-        },
+          if (trailingButton != null) // إضافة زر الموقع إذا كان موجودًا
+            Padding(
+              padding: const EdgeInsets.only(left: 8.0), // إضافة بعض المسافة
+              child: trailingButton,
+            ),
+        ],
       ),
     );
   }
@@ -312,7 +355,7 @@ class _EditFamilyInfoScreenState extends State<EditFamilyInfoScreen> {
         ),
         SizedBox(height: 1.h),
         _buildDropdownField(
-          label: 'Zone',
+          label: 'Original Zone',
           items: zones,
           selectedValue: _currentZoneController.text.isEmpty
               ? null
@@ -338,8 +381,10 @@ class _EditFamilyInfoScreenState extends State<EditFamilyInfoScreen> {
             Expanded(
               child: _buildInputField(
                 label: 'GPS',
-                controller: _currentZipController,
-                keyboardType: TextInputType.number,
+                controller: _destinationZipController,
+                keyboardType: TextInputType.none, // تعطيل لوحة المفاتيح
+
+                suffixIcon: _buildLocationButton(), // إضافة زر الموقع هنا
               ),
             ),
           ],
@@ -384,18 +429,33 @@ class _EditFamilyInfoScreenState extends State<EditFamilyInfoScreen> {
         Row(
           children: [
             Expanded(
-              flex: 2,
               child: _buildInputField(
-                label: 'Origin GPS ',
+                label: 'GPS',
                 controller: _destinationResidenceController,
+                keyboardType: TextInputType.none, // تعطيل لوحة المفاتيح
+
+                suffixIcon: _buildLocationButton(), // إضافة زر الموقع هنا
               ),
             ),
             SizedBox(width: 16.w),
             Expanded(
-              child: _buildInputField(
-                label: 'Exit Date',
-                controller: _destinationZipController,
-                keyboardType: TextInputType.number,
+              child: GestureDetector(
+                onTap: () => _selectDate(context), // Show date picker on tap
+                child: AbsorbPointer(
+                  child: _buildInputField(
+                    label: 'Exit Date',
+                    controller: _destinationZipController,
+                    keyboardType: TextInputType.none, // Disable keyboard
+                    suffixIcon: IconButton(
+                      icon: Icon(Icons.calendar_today, color: Colors.blue),
+                      onPressed: () => _selectDate(context), // Show date picker
+                      padding: EdgeInsets
+                          .zero, // Remove padding for better alignment
+                      constraints:
+                          BoxConstraints(), // Remove constraints for better alignment
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
@@ -429,6 +489,72 @@ class _EditFamilyInfoScreenState extends State<EditFamilyInfoScreen> {
     );
   }
 
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2101),
+    );
+    if (picked != null) {
+      setState(() {
+        _destinationZipController.text =
+            "${picked.toLocal()}".split(' ')[0]; // Format the date as needed
+      });
+    }
+  }
+
+  Widget _buildLocationButton() {
+    return IconButton(
+      icon: const Icon(Icons.location_on),
+      onPressed: () async {
+        try {
+          bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+          if (!serviceEnabled) {
+            serviceEnabled = await Geolocator.openLocationSettings();
+            if (!serviceEnabled) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Location services are disabled')),
+              );
+              return;
+            }
+          }
+
+          LocationPermission permission = await Geolocator.checkPermission();
+          if (permission == LocationPermission.denied) {
+            permission = await Geolocator.requestPermission();
+            if (permission != LocationPermission.whileInUse) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                    content: Text('Location permissions are denied')),
+              );
+              return;
+            }
+          }
+
+          Position position = await Geolocator.getCurrentPosition();
+          final familyInfo =
+              Provider.of<FamilyInfoProvider>(context, listen: false);
+
+          familyInfo.updateCurrentLocation(
+            familyInfo.currentLocation.copyWith(
+              gps: '${position.latitude},${position.longitude}',
+            ),
+          );
+
+          setState(() {
+            _currentGPSController.text =
+                '${position.latitude},${position.longitude}';
+          });
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error getting location: ${e.toString()}')),
+          );
+        }
+      },
+    );
+  }
+
   @override
   void dispose() {
     _currentCountryController.dispose();
@@ -437,6 +563,8 @@ class _EditFamilyInfoScreenState extends State<EditFamilyInfoScreen> {
     _currentResidenceController.dispose();
     _currentZipController.dispose();
     _currentMobileNumber.dispose();
+    _currentGPSController.dispose();
+    _destinationGPSController.dispose();
 
     _destinationCountryController.dispose();
     _destinationRegionController.dispose();
